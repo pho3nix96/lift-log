@@ -127,6 +127,62 @@ th:first-child,td:first-child{text-align:left}
 <div class="toast" id="toast" hidden></div>
 
 <script>
+/* Standalone storage: a small localStorage-backed stand-in for the database the app was written against. Data stays in this browser; use Export/Import to back up or move it. */
+(function(){
+'use strict';
+var P='liftlog.db.',mem={},listeners={};
+function get(c){if(!mem[c]){try{mem[c]=JSON.parse(localStorage.getItem(P+c)||'{}')}catch(e){mem[c]={}}}return mem[c]}
+function save(c){try{localStorage.setItem(P+c,JSON.stringify(mem[c]))}catch(e){var er=new Error('quota');er.code='quota_exceeded';throw er}}
+function snap(c){var d=get(c);return {docs:Object.keys(d).map(function(id){return {id:id,exists:true,data:function(){return JSON.parse(JSON.stringify(d[id]))}}})}}
+function emit(c){(listeners[c]||[]).forEach(function(f){setTimeout(function(){f(snap(c))},0)})}
+function write(c,fn){try{fn(get(c));save(c)}catch(e){return Promise.reject(e)}emit(c);return Promise.resolve()}
+var db={
+  collection:function(c){return {
+    onSnapshot:function(cb){(listeners[c]=listeners[c]||[]).push(cb);setTimeout(function(){cb(snap(c))},0)},
+    add:function(data){var id='b'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);return write(c,function(d){d[id]=data}).then(function(){return {id:id}})}}},
+  doc:function(p){var a=p.split('/'),c=a[0],id=a[1];return {
+    set:function(v){return write(c,function(d){d[id]=JSON.parse(JSON.stringify(v))})},
+    delete:function(){return write(c,function(d){delete d[id]})}}}
+};
+if(!window.claude)window.claude={};
+if(!window.claude.use)window.claude.use=function(n){return Promise.resolve(n==='db'?db:null)};
+else return; /* running inside Claude: keep its own storage */
+
+/* First run: start MC1 with an empty bench / squat / pull-up template. */
+var mcs=get('microcycles');
+if(!Object.keys(mcs).length){
+  var sets=[];
+  [['bench',1],['squat',2],['pullup',3]].forEach(function(x){
+    sets.push({ses:x[1],lift:x[0],n:1,wu:true,pct:x[0]==='pullup'?null:0.4,load:null,tr:x[0]==='pullup'?6:8,ar:null,anchor:false});
+    for(var i=1;i<=3;i++)sets.push({ses:x[1],lift:x[0],n:i,wu:false,pct:null,load:null,tr:8,ar:null,anchor:i===3});
+  });
+  mcs.MC1={n:1,calWeeks:'',bw:null,dates:['','',''],sets:sets};
+  try{save('microcycles')}catch(e){}
+}
+
+/* Export / import */
+var top=document.querySelector('.top');
+if(top){
+  var box=document.createElement('div');box.className='chips';
+  box.innerHTML='<button class="btn ghost" id="ll-exp">Export</button><button class="btn ghost" id="ll-imp">Import</button><input type="file" id="ll-file" accept="application/json" hidden>';
+  top.appendChild(box);
+  document.getElementById('ll-exp').onclick=function(){
+    var blob=new Blob([JSON.stringify({microcycles:get('microcycles'),body:get('body')},null,1)],{type:'application/json'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lift-log-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href)};
+  var fi=document.getElementById('ll-file');
+  document.getElementById('ll-imp').onclick=function(){fi.click()};
+  fi.onchange=function(){
+    var f=fi.files[0];if(!f)return;
+    f.text().then(function(t){
+      var j=JSON.parse(t);if(!j||typeof j.microcycles!=='object')throw 0;
+      if(!confirm('Replace the data in this browser with the imported file?'))return;
+      mem.microcycles=j.microcycles;mem.body=j.body||{};save('microcycles');save('body');location.reload();
+    }).catch(function(){alert('That file is not a Lift Log export.')});
+    fi.value=''};
+}
+})();
+</script>
+<script>
 (function(){
 'use strict';
 var COEF=0.0333;
