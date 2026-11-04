@@ -1,6 +1,6 @@
 # Lift Log
 
-A standalone, single-file training log for bench, squat and weighted pull-ups, organised by microcycle. It has progress charts, a body-measurement log and an e1RM calculator.
+A standalone, single-file training log for bench, squat and weighted pull-ups, organised by microcycle. It starts on MC7 as the default microcycle and has progress charts, a body-measurement log and an e1RM calculator.
 
 Open `index.html` in a browser. No build step or server is needed.
 
